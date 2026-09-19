@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>voiceagent · 语音办公助手</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="brand">
+      <span class="dot" id="conn-dot"></span>
+      <h1 id="agent-name">voiceagent</h1>
+      <span class="badge" id="state-badge">未连接</span>
+    </div>
+    <div class="header-actions">
+      <button id="btn-handsfree" class="ghost" title="免提模式：检测到说话自动开始/结束">免提：关</button>
+      <button id="btn-bargein" class="ghost" title="说话时自动打断助手（关闭则需等它说完）">打断：开</button>
+      <button id="btn-asr-mode" class="ghost" title="语音识别方式">识别：服务端</button>
+      <button id="btn-panel" class="ghost">状态</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="transcript" aria-live="polite"></section>
+
+    <div id="confirm-bar" hidden>
+      <span id="confirm-text"></span>
+      <button id="btn-confirm-yes" class="primary">确认</button>
+      <button id="btn-confirm-no" class="ghost">取消</button>
+    </div>
+
+    <footer>
+      <button id="btn-ptt" class="ptt">
+        <span class="ptt-icon">🎙</span>
+        <span class="ptt-label">按住说话</span>
+      </button>
+      <button id="btn-stop" class="ghost" title="打断当前回答">打断</button>
+      <form id="text-form">
+        <input id="text-input" type="text" placeholder="也可以直接打字…" autocomplete="off" />
+        <button type="submit" class="ghost">发送</button>
+      </form>
+    </footer>
+  </main>
+
+  <aside id="panel" hidden>
+    <h2>运行状态</h2>
+    <div id="panel-body"></div>
+    <h2>本轮延迟</h2>
+    <div id="metrics"></div>
+    <h2>可用工具</h2>
+    <div id="tools"></div>
+  </aside>
+
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>
