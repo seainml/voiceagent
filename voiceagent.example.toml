@@ -1,0 +1,181 @@
+# voiceagent configuration
+#
+# Copy to `voiceagent.toml` (or run `voiceagent init`) and edit.
+#
+# Precedence:  defaults  <  this file  <  .env  <  environment (VA_*)  <  CLI flags
+# Nested keys can be overridden from the environment with a double underscore:
+#     VA_ASR__PROVIDER=openai   VA_TTS__VOICE=Tingting   VA_LLM__MODEL=deepseek-chat
+#
+# Secrets are NEVER stored here. Only the *name* of the environment variable
+# that holds them (see `api_key_env`).
+
+# --------------------------------------------------------------------------
+# Speech recognition
+# --------------------------------------------------------------------------
+[asr]
+# auto | faster_whisper | openai | browser | mock
+#   auto -> faster_whisper if installed, else an OpenAI-compatible endpoint if a
+#           key is present, else the browser's built-in recognition.
+provider = "auto"
+
+# Local: tiny | base | small | medium | large-v3.  Remote: the model id.
+model = "base"
+
+# Set to "en", "ja", ... or null to auto-detect.
+language = "zh"
+
+# Contextual biasing. This matters far more than model size for the errors that
+# actually annoy people: names, project codenames, CLI names.
+hotwords = []
+
+# Only used by provider = "openai"
+# base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+
+# Local model tuning
+device = "cpu"          # cpu | cuda
+compute_type = "int8"   # int8 | int8_float16 | float16
+beam_size = 1
+download_root = ".voiceagent/models"
+
+# --------------------------------------------------------------------------
+# Speech synthesis
+# --------------------------------------------------------------------------
+[tts]
+# auto | macos_say | edge | openai | mock
+#   auto -> macOS `say` on Darwin, else edge-tts if installed, else OpenAI.
+provider = "auto"
+
+# null picks a sensible voice for the detected language.
+# macOS:  Tingting (zh-CN) / Meijia (zh-TW) / Sinji (zh-HK) / Samantha (en)
+# edge:   zh-CN-XiaoxiaoNeural, zh-CN-YunxiNeural, en-US-AriaNeural, ...
+voice = "Tingting"
+
+rate = 195              # words per minute, used by macos_say
+speed = 1.0             # 1.0 = unchanged; applies to cloud providers
+
+# model = "tts-1"
+# base_url = "https://api.openai.com/v1"
+# response_format = "pcm"   # pcm avoids a container decode; mp3 is most compatible
+api_key_env = "OPENAI_API_KEY"
+
+# --------------------------------------------------------------------------
+# The reasoning model — any OpenAI-compatible /chat/completions endpoint
+# --------------------------------------------------------------------------
+[llm]
+provider = "auto"       # auto | openai | ollama | echo | mock
+model = "deepseek-chat"
+base_url = "https://api.deepseek.com/v1"
+api_key_env = "DEEPSEEK_API_KEY"
+temperature = 0.5
+max_tokens = 1200
+timeout_s = 120
+
+# Some gateways need extra headers or body fields:
+# extra_headers = { "X-Tenant" = "acme" }
+# extra_body = { "top_p" = 0.9 }
+
+# --------------------------------------------------------------------------
+# The agent persona
+# --------------------------------------------------------------------------
+[agent]
+name = "Aria"
+persona = "You are a calm, efficient office assistant. You are heard, not read, so you speak in short, natural sentences."
+max_tool_iterations = 6
+
+# Replace the built-in voice-oriented prompt entirely (the environment and
+# tool sections are still appended):
+# system_prompt_file = "prompts/persona.md"
+
+# --------------------------------------------------------------------------
+# Turn-taking and streaming
+# --------------------------------------------------------------------------
+[pipeline]
+barge_in = true
+sentence_flush_chars = 28   # speak early once a clause reaches this length
+max_sentence_chars = 180
+max_spoken_chars = 700      # hard cap on how much of one reply is read aloud
+history_turns = 12
+vad_silence_ms = 700        # trailing silence that closes a turn
+vad_threshold = 0.015
+asr_min_utterance_ms = 250
+max_utterance_s = 60
+
+# --------------------------------------------------------------------------
+# Tools
+# --------------------------------------------------------------------------
+[tools]
+workspace = "."
+max_output_chars = 4000
+shell_timeout_s = 120
+memory_file = ".voiceagent/memory.jsonl"
+
+# Anything listed in `confirm` is announced and awaited before it runs.
+confirm = ["run_shell", "write_file", "ask_claude_code", "ask_codex", "ask_dsh"]
+
+enabled = [
+  "ask_claude_code", "ask_codex", "ask_dsh",
+  "run_shell", "http_request",
+  "read_file", "write_file", "list_files",
+  "remember", "recall",
+  "mcp",
+]
+
+# Refuse these outright. A denylist is a seatbelt, not a sandbox — the real
+# control is the spoken confirmation above.
+shell_denylist = ["rm -rf /", "mkfs", "dd if=", ":(){:|:&};:", "shutdown", "reboot", "> /dev/"]
+
+# Restrict outbound HTTP to these hosts (empty = any host).
+http_allow_hosts = []
+
+# Let the wrapped agent CLIs skip their own permission prompts. Off by default
+# because it is exactly as dangerous as it sounds.
+allow_unsafe_agent_writes = false
+
+# --- Wrapped coding agents -------------------------------------------------
+# Each is exposed to the model as a tool. The prompt is prefixed with a request
+# for a short spoken summary, because these CLIs otherwise answer in Markdown.
+
+[tools.agents.claude]
+enabled = true
+command = "claude"
+args = ["--print", "--output-format", "stream-json", "--verbose"]
+preamble = "You are being invoked by a voice assistant, so your final answer will be read aloud. Do the task autonomously and completely. When you are done, end with a spoken summary of at most three short sentences in the user's language: no Markdown, no code blocks, no bullet lists."
+timeout_s = 900
+
+[tools.agents.codex]
+enabled = true
+command = "codex"
+args = ["exec", "--color", "never", "--skip-git-repo-check", "--json"]
+preamble = "You are being invoked by a voice assistant, so your final answer will be read aloud. Do the task autonomously and completely. When you are done, end with a spoken summary of at most three short sentences in the user's language: no Markdown, no code blocks, no bullet lists."
+timeout_s = 900
+
+[tools.agents.dsh]
+enabled = true
+command = "dsh"
+args = ["--profile", "headless"]
+preamble = "You are being invoked by a voice assistant, so your final answer will be read aloud. Do the task autonomously and completely. When you are done, end with a spoken summary of at most three short sentences in the user's language: no Markdown, no code blocks, no bullet lists."
+timeout_s = 900
+
+# --- MCP servers -----------------------------------------------------------
+# Anything with an MCP server becomes a voice tool automatically. Tools are
+# named mcp__<server>__<tool> and are confirmed if their name looks destructive.
+#
+# [tools.mcp.filesystem]
+# command = "npx"
+# args = ["-y", "@modelcontextprotocol/server-filesystem", "/Users/me/notes"]
+#
+# [tools.mcp.github]
+# command = "npx"
+# args = ["-y", "@modelcontextprotocol/server-github"]
+# env = { GITHUB_PERSONAL_ACCESS_TOKEN = "..." }   # prefer an env var
+
+# --------------------------------------------------------------------------
+# Server
+# --------------------------------------------------------------------------
+[server]
+host = "127.0.0.1"
+port = 8765
+# Set this before binding to anything other than localhost.
+# auth_token = "change-me"
+cors_origins = ["*"]

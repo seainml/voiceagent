@@ -1,0 +1,37 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# --- Tooling caches (kept inside the workspace because of sandboxed CI/dev boxes) ---
+.uv-cache/
+.uv-python/
+.pip-cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- Local config & secrets ---
+.env
+.env.local
+voiceagent.local.toml
+*.local.toml
+secrets/
+
+# --- Runtime artifacts ---
+data/
+logs/
+*.log
+recordings/
+.voiceagent/
+
+# --- OS / editor ---
+.DS_Store
+.idea/
+.vscode/
+*.swp

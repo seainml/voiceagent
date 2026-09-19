@@ -1,0 +1,84 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "voiceagent"
+version = "0.1.0"
+description = "Voice-first office assistant: pluggable speech stack + pluggable tools (claude code / codex / dsh / MCP)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "voiceagent contributors" }]
+keywords = ["voice-agent", "speech", "asr", "tts", "llm", "mcp", "agent"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Multimedia :: Sound/Audio :: Speech",
+  "Topic :: Office/Business",
+]
+
+# Core runtime: intentionally small so the agent boots even without optional extras.
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "httpx>=0.27",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.2",
+  "typer>=0.12",
+  "rich>=13.7",
+  "numpy>=1.26",
+  "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+# Local, offline ASR (large download on first use; run `voiceagent models pull`).
+local-asr = ["faster-whisper>=1.0"]
+# Microphone capture + local playback for the terminal entrypoint.
+local-audio = ["sounddevice>=0.4.6"]
+# Extra cloud TTS providers.
+edge = ["edge-tts>=6.1"]
+# Everything above (except platform-specific audio, which needs PortAudio).
+all = ["faster-whisper>=1.0", "sounddevice>=0.4.6", "edge-tts>=6.1"]
+
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+  "ruff>=0.5",
+  "build>=1.2",
+]
+
+[project.scripts]
+voiceagent = "voiceagent.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/seainml/voiceagent"
+Repository = "https://github.com/seainml/voiceagent"
+Issues = "https://github.com/seainml/voiceagent/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/voiceagent"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/voiceagent/server/static" = "voiceagent/server/static"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
