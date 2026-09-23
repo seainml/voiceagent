@@ -310,6 +310,14 @@ class Settings(BaseSettings):
                     "base_url": self.llm.base_url},
             "tools": {"enabled": list(self.tools.enabled), "confirm": list(self.tools.confirm)},
             "agent": {"name": self.agent.name},
+            # host/port let tooling (scripts/service.sh) discover where the
+            # server is listening without re-implementing the config lookup.
+            # The token itself is never included — only whether one is set.
+            "server": {
+                "host": self.server.host,
+                "port": self.server.port,
+                "auth_required": bool(self.server.auth_token),
+            },
         }
 
 
