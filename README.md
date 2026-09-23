@@ -6,7 +6,7 @@
 
 可插拔语音链路 · 可插拔工具 · 本地优先、零密钥可跑
 
-[![tests](https://img.shields.io/badge/tests-192%20passing-brightgreen)](#开发)
+[![tests](https://img.shields.io/badge/tests-214%20passing-brightgreen)](#开发)
 [![smoke](https://img.shields.io/badge/e2e%20smoke-14%2F14-brightgreen)](#开发)
 [![python](https://img.shields.io/badge/python-3.11%2B-blue)](#快速开始)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -38,7 +38,7 @@ voiceagent serve         # 打开 http://127.0.0.1:8765
 
 | 验证项 | 结果 |
 |---|---|
-| 单元测试 | **192 个通过**，4.3 s |
+| 单元测试 | **214 个通过**，4.4 s |
 | 真实端到端冒烟 | **14/14 通过**（`scripts/smoke.py`） |
 | 完整语音闭环 | 合成 3.04 s 语音 → Whisper 识别 → LLM → **721 KB TTS 音频回传**，端到端 **4.0 s** |
 | 真实 `dsh` 子进程调用 | ✓ 7.6 s 返回 |
@@ -97,6 +97,135 @@ echo 'DEEPSEEK_API_KEY=sk-...' >> .env      # 或任意 OpenAI 兼容端点
 
 没配模型也能完整验证语音链路——内置的 `echo` provider 会**说出**它听到了什么，
 并告诉你还缺什么。只有"思考"这一环不在。
+
+---
+
+## 运行与运维
+
+### 前台运行（调试用）
+
+```bash
+voiceagent serve                    # Ctrl-C 停止
+voiceagent serve --port 9000        # 换端口
+voiceagent serve --reload           # 改代码自动重启
+```
+
+`Ctrl-C` 会优雅关闭：取消进行中的回合、关掉 MCP 子进程、断开 WebSocket。
+
+### 后台运行（日常用）
+
+用附带的脚本，它会 detached 启动、记录 PID、写日志：
+
+```bash
+./scripts/service.sh start          # 后台启动，默认 http://127.0.0.1:8765
+./scripts/service.sh status         # 进程、启动时长、健康检查
+./scripts/service.sh logs           # 最近 60 行日志
+./scripts/service.sh logs -f        # 实时跟随
+./scripts/service.sh restart        # 重启（改了配置或代码后用）
+./scripts/service.sh stop           # 停止
+```
+
+其它用法：
+
+```bash
+./scripts/service.sh start --port 9000        # 换端口
+./scripts/service.sh start --reload           # 开发模式
+LINES=300 ./scripts/service.sh logs           # 看更多日志
+./scripts/service.sh doctor                   # 本机能力体检
+```
+
+脚本产生的文件都在 `.voiceagent/`（已 gitignore）：
+
+```
+.voiceagent/run/voiceagent.pid      # PID 文件
+.voiceagent/logs/voiceagent.log     # 日志（会累积，可随时删除）
+.voiceagent/models/                 # 本地 ASR 模型缓存
+```
+
+`status` 在未运行时返回退出码 1，方便写进脚本判断。它也能识别**不是它启动的**服务
+（比如你在另一个终端里 `voiceagent serve` 的），并通过端口找到对应进程。
+
+### 更新
+
+```bash
+./scripts/service.sh update          # 拉代码 + 按需重装依赖 + 重启
+./scripts/service.sh update --deps   # 强制重装依赖
+```
+
+`update` 会：`git fetch` → 显示将要应用的提交 → 检查工作区是否干净 →
+`git merge --ff-only` → 依赖有变化时重装 → 只在真的有变化时重启。
+**没有变化就什么都不做**，不会白白重启。
+
+手动等价操作：
+
+```bash
+git pull
+uv pip install -e ".[dev]"           # 依赖有变化时
+./scripts/service.sh restart
+```
+
+想更新本地 ASR 模型（例如换更大的模型）：
+
+```bash
+# 1. 改配置
+#    [asr] model = "small"      （或 medium / large-v3）
+# 2. 删掉旧缓存并重启，会重新下载
+rm -rf .voiceagent/models
+./scripts/service.sh restart
+```
+
+### 暂停而不是停止
+
+如果只是想让它**暂时不响应**，不需要停进程：
+
+- 浏览器里关掉「免提」并松开按钮即可——它只在被唤起时才会听
+- 想彻底静默：`./scripts/service.sh stop`，之后再 `start`（启动约 2–3 秒，
+  本地 ASR 模型会重新预热）
+
+### 开机自启（macOS）
+
+`launchd` 是 macOS 上正确的做法（`nohup` 撑不过重启）。存成
+`~/Library/LaunchAgents/com.local.voiceagent.plist`：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.local.voiceagent</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/绝对路径/voiceagent/.venv/bin/voiceagent</string>
+    <string>serve</string>
+  </array>
+  <key>WorkingDirectory</key><string>/绝对路径/voiceagent</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/绝对路径/voiceagent/.voiceagent/logs/launchd.log</string>
+  <key>StandardErrorPath</key><string>/绝对路径/voiceagent/.voiceagent/logs/launchd.err</string>
+</dict>
+</plist>
+```
+
+```bash
+launchctl load  ~/Library/LaunchAgents/com.local.voiceagent.plist   # 启用
+launchctl unload ~/Library/LaunchAgents/com.local.voiceagent.plist  # 停用
+```
+
+> 用 launchd 时先把 `./scripts/service.sh stop`，避免两个进程抢同一个端口。
+
+### 常见运维问题
+
+| 现象 | 处理 |
+|---|---|
+| `start` 报端口被占用 | 脚本会打印占用进程的 PID；`kill <pid>` 或换个端口 |
+| `status` 说 running 但打不开页面 | `./scripts/service.sh logs` 看最后几行，通常是模型预热或配置错误 |
+| 改了 `voiceagent.toml` 没生效 | 配置在启动时读取一次 → `./scripts/service.sh restart` |
+| 改了 `.env` 没生效 | 同上，`restart` |
+| 日志文件越来越大 | `./scripts/service.sh stop && rm .voiceagent/logs/*.log && ./scripts/service.sh start` |
+| 忘了改过什么配置 | `voiceagent config`（不含密钥）看生效值 |
+| 想彻底重来 | `rm -rf .voiceagent .venv && uv venv --python 3.12 .venv && uv pip install -e ".[dev]"` |
 
 ---
 
@@ -209,7 +338,7 @@ export VA_LLM__BASE_URL=http://127.0.0.1:11434/v1        # 本地 Ollama
 
 ```bash
 .venv/bin/ruff check src/ tests/ scripts/     # lint
-.venv/bin/python -m pytest -q                 # 192 个单元测试，约 4 s
+.venv/bin/python -m pytest -q                 # 214 个单元测试，约 4 s
 .venv/bin/python scripts/smoke.py             # 14 项真实端到端检查
 ```
 
